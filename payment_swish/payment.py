@@ -54,15 +54,28 @@ class AcquirerSwish(models.Model):
     # I dont know where we should such fields yet...
     # Can we even store files in fields?
 
+    provider = fields.Selection(selection_add=[('swish', 'Swish')])
+
+    # Swish specific details
+    # Read more: https://www.swish.nu/developer#swish-for-merchants
+    # Test info: https://www.swish.nu/faq/company/which-test-tools-are-there
+    swish_swish_nbr = fields.Char('Swish number',
+                                     required_if_provider='swish',
+                                     groups='base.group_user', # TODO: Should be here? Paypal has it on similar fields.
+                                     help="Swish Merchant number")
+#    swish_cert = fields....        # Placeholders as a reminder the certs and
+#    swish_private_key = fields.... # keys are required and Swish specific
+#    swish_verify = field....       # parameters. They do not necessarily need
+#                                   # to be defined in the Swish acquirer
+
     # prefix for cert files and so on....
     current_folder = os.path.dirname(os.path.abspath(__file__))
     cert_file_path = os.path.join(current_folder, "cert.pem")
     key_file_path = os.path.join(current_folder, "key.pem")
-    cert = (cert_file_path, key_file_path) 
+    cert = (cert_file_path, key_file_path)
     verify_file_path = os.path.join(current_folder, "swish.pem")
 
-    provider = fields.Selection(selection_add=[('swish', 'Swish')])
-    
+
     @api.multi
     def swish_form_generate_values(self, values):
         """Method that generates the values used to render the form button template."""
@@ -74,24 +87,24 @@ class AcquirerSwish(models.Model):
             'return_url': '/payment/swish/return',
             'tx_url': '/payment/swish/tx_url',
             'swish_test': "THIS IS A SWISH TEST"
-        })    
+        })
         # self.create_swish_payment(values)
         # _logger.warn("~ %s " % "swish_from_generate_values")
-        
+
         # Bypass controller answer test transaction instead...
         # self.create_fake_swish_call(values)
-        
+
         self.create_swish_payment(values)
         return swish_tx_values
 
-    # Redundant to use decorator ? 
+    # Redundant to use decorator ?
     # @api.multi
     def swish_get_form_action_url(self):
         """Returns the url of the button form."""
         # Should use this custom swish later ?
         # return '/payment/swish/initPayment'
         return '/payment/swish/tx_url'
-    
+
     @api.multi
     def swish_compute_fees(self, amount, currency_id, country_id):
         """TODO: Compute fees."""
@@ -113,7 +126,7 @@ class AcquirerSwish(models.Model):
 
 
     # Implementation taken from Wire Transfer for the create and write functions.
-    # This type of implementaion may be redundant. 
+    # This type of implementaion may be redundant.
     # Or we can use this hook for passing other data...
     # /usr/share/core-odoo/addons/payment_transfer/models/payment.py
     @api.model
@@ -149,14 +162,14 @@ class AcquirerSwish(models.Model):
         key_file_path = os.path.join(current_folder, "key.pem")
         cert = (cert_file_path, key_file_path)
         verify = os.path.join(current_folder, "swish.pem")
-        
+
         swish_client = swish.SwishClient(
             environment=swish.Environment.Test,
             merchant_swish_number='1231181189',
             cert=cert,
             verify=verify
         )
-        
+
         # Only use 2 decimal points.
         amount_str = str(tx_val['amount']).split(".")
         amount_str[1] = amount_str[1][0:2]
@@ -175,10 +188,10 @@ class AcquirerSwish(models.Model):
     def create_fake_swish_call(self, tx_val):
         callback_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url') + '/payment/swish'
         # _logger.warn("~ callback_url %s" %  callback_url)
-        
+
         payer_alias = str(tx_val['partner_phone']).replace(' ','').replace('-','').replace('+','')
 
-        
+
         # Typical return data from swish
         # Date format: 'YYYY-MM-DDThh:mm:ssTZD'
         swish_data =  {
@@ -204,31 +217,32 @@ class AcquirerSwish(models.Model):
             _logger.warning("~ Transaction is registered!!")
 
 
-class TxPayex(models.Model):
+class TxSwish(models.Model):
+    TAG = "TxSwish" # Tag usable for example logging
     _inherit = 'payment.transaction'
 
     swish_transaction_id = fields.Char('Swish transaction id')
     swish_transaction_payment_reference = fields.Char('Swish payment reference')
 
-    # Maybe add fields like: 
+    # Maybe add fields like:
     # * swish_id
     # * swish_payment_reference
-   
+
     # These functions are triggered by making a payment on the website "Betala nu"-knappen
-    # Fucntions will be executed in this order: 
+    # Fucntions will be executed in this order:
     #   1. _<acquirer-name>_form_get_tx_from_data
     #   2. _<acquirer-name>_form_get_invalid_parameters
     #   3. _<acquirer-name>__form_validate
-    # For more information /usr/share/core-odoo/addons/payment/models/payment_acquirer.py 
+    # For more information /usr/share/core-odoo/addons/payment/models/payment_acquirer.py
     # in the function PaymentTransaction.form_feedback
 
 
     # Here we find the transaction that is connected to the sale order (sale cart)
-    # This is done by looking after the reference that odoo generates for the sale order 
+    # This is done by looking after the reference that odoo generates for the sale order
     # (the reference value is passed through _form_generate_values function)
     @api.model
     def _swish_form_get_tx_from_data(self, data):
-        # _logger.warn('~ _swish_form_get_tx_from_data  REFERENCE: %s  ' % data['payeePaymentReference'])        
+        # _logger.warn('~ _swish_form_get_tx_from_data  REFERENCE: %s  ' % data['payeePaymentReference'])
         reference = data['payeePaymentReference']
         if not reference:
             error_msg = 'Swish: received data with missing reference (%s)' % reference
@@ -262,13 +276,13 @@ class TxPayex(models.Model):
             invalid_parameters.append(('Declined', 'The payer declined to make the payment', ''))
         if(data['status'] == 'CANCELLED'):
             invalid_parameters.append((
-                'Cancelled', 
-                'The payment request was cancelled either by the merchant or by the payer via the merchant site.', 
+                'Cancelled',
+                'The payment request was cancelled either by the merchant or by the payer via the merchant site.',
                 ''
             ))
         return invalid_parameters
 
-            
+
     @api.model
     def _swish_form_validate(self, data):
         # _logger.warn("~ _swish_form_validate  %s" % data )
@@ -277,7 +291,7 @@ class TxPayex(models.Model):
         former_tx_state = self.state
         res = {
             'acquirer_reference': data['payeePaymentReference'],
-            'swish_transaction_id': data['id'], 
+            'swish_transaction_id': data['id'],
             'swish_transaction_payment_reference': data['paymentReference']
         }
 
@@ -293,6 +307,27 @@ class TxPayex(models.Model):
             if self.state == 'done' and self.state != former_tx_state:
                 # _logger.info('~ Validated swish payment for tx %s: set as done' % (self.reference))
                 return self.write(res)
-        
-            _logger.warn("~ %s" % "End of swish validate returns true")  
+
+            _logger.warn("~ %s" % "End of swish validate returns true")
             return True
+
+    # --------------------------------------------------
+    # SERVER2SERVER RELATED METHODS
+    # --------------------------------------------------
+
+    def swish_s2s_do_transaction(self, **kwargs):
+        '''
+        '''
+        pass
+    def swish_s2s_do_refund(self, **kwargs):
+        '''
+        '''
+        pass
+    def swish_s2s_void_transaction(self, **kwargs):
+        '''
+        '''
+        pass
+    def swish_s2s_get_tx_status(self):
+        '''
+        '''
+        pass
