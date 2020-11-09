@@ -1,5 +1,5 @@
-<!-- PAYMENT ADYEN TEMPLATES -->
 <?xml version="1.0" encoding="utf-8"?>
+<!-- PAYMENT ADYEN TEMPLATES -->
 <odoo>
     <!--Inspired by payment_adyen_templates.xml -->
     <data noupdate="1">

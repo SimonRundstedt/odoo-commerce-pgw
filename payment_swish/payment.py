@@ -56,18 +56,31 @@ class AcquirerSwish(models.Model):
 
     provider = fields.Selection(selection_add=[('swish', 'Swish')])
 
-    # Swish specific details
+    # Swish specific details --------------------------------------------------
     # Read more: https://www.swish.nu/developer#swish-for-merchants
     # Test info: https://www.swish.nu/faq/company/which-test-tools-are-there
     swish_swish_nbr = fields.Char('Swish number',
                                      required_if_provider='swish',
                                      groups='base.group_user', # TODO: Should be here? Paypal has it on similar fields.
                                      help="Swish Merchant number")
+    swish_cert = fields.Text("Swish certificate",
+                             required_if_provider='swish',
+                             groups='base.group_user', # TODO: Should be here? Paypal has it on similar fields.
+                             )
+    swish_private_key = fields.Text("Swish private key",
+                             required_if_provider='swish',
+                             groups='base.group_user', # TODO: Should be here? Paypal has it on similar fields.
+                             )
+    swish_verify = fields.Text("Swish verification certificate", # TODO : Verify (heh) what this one does. TLS verification?
+                             required_if_provider='swish',
+                             groups='base.group_user', # TODO: Should be here? Paypal has it on similar fields.
+                             )
 #    swish_cert = fields....        # Placeholders as a reminder the certs and
 #    swish_private_key = fields.... # keys are required and Swish specific
 #    swish_verify = field....       # parameters. They do not necessarily need
 #                                   # to be defined in the Swish acquirer
-
+    
+    # TODO : Replace occurances with the corresponding swish_cert.. etc
     # prefix for cert files and so on....
     current_folder = os.path.dirname(os.path.abspath(__file__))
     cert_file_path = os.path.join(current_folder, "cert.pem")
@@ -76,7 +89,7 @@ class AcquirerSwish(models.Model):
     verify_file_path = os.path.join(current_folder, "swish.pem")
 
 
-    @api.multi
+#    @api.multi # Removed for Odoo13 
     def swish_form_generate_values(self, values):
         """Method that generates the values used to render the form button template."""
 
@@ -104,8 +117,8 @@ class AcquirerSwish(models.Model):
         # Should use this custom swish later ?
         # return '/payment/swish/initPayment'
         return '/payment/swish/tx_url'
-
-    @api.multi
+    
+#    @api.multi # Removed for Odoo13 
     def swish_compute_fees(self, amount, currency_id, country_id):
         """TODO: Compute fees."""
         self.ensure_one()
@@ -129,18 +142,18 @@ class AcquirerSwish(models.Model):
     # This type of implementaion may be redundant.
     # Or we can use this hook for passing other data...
     # /usr/share/core-odoo/addons/payment_transfer/models/payment.py
-    @api.model
+#    @api.multi # Removed for Odoo13
     def create(self, values):
-        """ Hook in create to create a default post_msg. This is done in create
-        to have access to the name and other creation values. If no post_msg
-        or a void post_msg is given at creation, generate a default one. """
-
-        if values.get('provider') == 'swish' and not values.get('post_msg'):
-            values['post_msg'] = self._format_transfer_data()
+#        """ Hook in create to create a default post_msg. This is done in create
+#        to have access to the name and other creation values. If no post_msg
+#        or a void post_msg is given at creation, generate a default one. """
+#
+#        if values.get('provider') == 'swish' and not values.get('post_msg'):
+#            values['post_msg'] = self._format_transfer_data()
         return super(AcquirerSwish, self).create(values)
 
 
-    @api.multi
+#    @api.multi # Removed for Odoo13 
     def write(self, values):
         """ Hook in write to create a default post_msg. See create(). """
         if all(not acquirer.post_msg and acquirer.provider != 'swish' for acquirer in self) and values.get('provider') == 'swish':
@@ -149,10 +162,12 @@ class AcquirerSwish(models.Model):
 
     @api.model
     def create_swish_payment(self, tx_val):
+        '''
+        '''
         base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
         callback_url = base_url + '/payment/swish'
 
-        if not 'https' in callback_url:
+        if not 'https' in callback_url: # callback must use https - the Swish docs
             callback_url = base_url.replace('http', 'https')
 
         currency = tx_val['currency'].name
@@ -165,7 +180,7 @@ class AcquirerSwish(models.Model):
 
         swish_client = swish.SwishClient(
             environment=swish.Environment.Test,
-            merchant_swish_number='1231181189',
+            merchant_swish_number=self.swish_swish_nbr,
             cert=cert,
             verify=verify
         )
@@ -183,6 +198,9 @@ class AcquirerSwish(models.Model):
             currency = "SEK", #str(tx['currency_id'].name),
             message = 'Order '
         )
+
+
+
 
     @api.model
     def create_fake_swish_call(self, tx_val):
@@ -218,7 +236,7 @@ class AcquirerSwish(models.Model):
 
 
 class TxSwish(models.Model):
-    TAG = "TxSwish" # Tag usable for example logging
+    TAG = "TxSwish" # Tag usable for for example logging
     _inherit = 'payment.transaction'
 
     swish_transaction_id = fields.Char('Swish transaction id')
@@ -315,19 +333,23 @@ class TxSwish(models.Model):
     # SERVER2SERVER RELATED METHODS
     # --------------------------------------------------
 
-    def swish_s2s_do_transaction(self, **kwargs):
-        '''
-        '''
-        pass
-    def swish_s2s_do_refund(self, **kwargs):
-        '''
-        '''
-        pass
-    def swish_s2s_void_transaction(self, **kwargs):
-        '''
-        '''
-        pass
-    def swish_s2s_get_tx_status(self):
-        '''
-        '''
-        pass
+#    def swish_s2s_do_transaction(self, **kwargs):
+#        '''
+#        '''
+#        pass
+#    def swish_s2s_capture_transaction(self, **kwargs):
+#        '''
+#        '''
+#        pass
+#    def swish_s2s_do_refund(self, **kwargs):
+#        '''
+#        '''
+#        pass
+#    def swish_s2s_void_transaction(self, **kwargs):
+#        '''
+#        '''
+#        pass
+#    def swish_s2s_get_tx_status(self):
+#        '''
+#        '''
+#        pass

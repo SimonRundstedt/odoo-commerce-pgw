@@ -21,7 +21,7 @@
 ##############################################################################
 {
         'name': 'swish Payment Acquirer',
-        'version': '12.0.0.1',
+        'version': '13.0.0.1',
         'summary': 'Payment Acquirer: Swish Pay Implementation (New)',
         'category': 'Hidden',
         'description': """swish Payment Acquirer.""",
